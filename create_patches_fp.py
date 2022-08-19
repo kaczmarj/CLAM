@@ -266,7 +266,7 @@ parser.add_argument('--patch_level', type=int, default=0,
 					help='downsample level at which to patch')
 parser.add_argument('--process_list',  type = str, default=None,
 					help='name of list of images to process with parameters (.csv)')
-parser.add_argument("--patch_spacing", type=float, default=0.25,
+parser.add_argument("--patch_spacing", type=float, required=True,
 				    help="Patch spacing in micrometers per pixel.")
 
 if __name__ == '__main__':
