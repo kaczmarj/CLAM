@@ -55,7 +55,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 				  use_default_params = False,
 				  seg = False, save_mask = True,
 				  stitch= False,
-				  patch = False, auto_skip=True, process_list = None):
+				  patch = False, auto_skip=True, process_list = None, patch_spacing=None):
 
 
 
@@ -85,6 +85,8 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 	seg_times = 0.
 	patch_times = 0.
 	stitch_times = 0.
+
+	orig_patch_size = patch_size
 
 	for i in range(total):
 		df.to_csv(os.path.join(save_dir, 'process_list_autogen.csv'), index=False)
@@ -194,6 +196,25 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 
 		patch_time_elapsed = -1 # Default time
 		if patch:
+			# -------------------------------------------
+			# Added by Jakub Kaczmarzyk (github kaczmarj) to get patch size for a particular
+			# spacing. The patching happens at the highest resolution, but we want to
+			# extract patches at a particular spacing.
+			if patch_spacing is not None:
+				from PIL import Image
+				orig_max = Image.MAX_IMAGE_PIXELS
+				import large_image
+				# Importing large_image changes MAX_IMAGE_PIXELS to None.
+				Image.MAX_IMAGE_PIXELS = orig_max
+				del orig_max, Image
+
+				ts = large_image.getTileSource(full_path)
+				patch_mm = patch_spacing / 1000  # convert micrometer to millimeter.
+				patch_size = orig_patch_size * patch_mm / ts.getMetadata()["mm_x"]
+				patch_size = round(patch_size)
+				del ts
+			# -------------------------------------------
+
 			current_patch_params.update({'patch_level': patch_level, 'patch_size': patch_size, 'step_size': step_size,
 										 'save_path': patch_save_dir})
 			file_path, patch_time_elapsed = patching(WSI_object = WSI_object,  **current_patch_params,)
@@ -245,6 +266,8 @@ parser.add_argument('--patch_level', type=int, default=0,
 					help='downsample level at which to patch')
 parser.add_argument('--process_list',  type = str, default=None,
 					help='name of list of images to process with parameters (.csv)')
+parser.add_argument("--patch_spacing", type=float, default=0.25,
+				    help="Patch spacing in micrometers per pixel.")
 
 if __name__ == '__main__':
 	args = parser.parse_args()
@@ -307,4 +330,4 @@ if __name__ == '__main__':
 											seg = args.seg,  use_default_params=False, save_mask = True,
 											stitch= args.stitch,
 											patch_level=args.patch_level, patch = args.patch,
-											process_list = process_list, auto_skip=args.no_auto_skip)
+											process_list = process_list, auto_skip=args.no_auto_skip, patch_spacing=args.patch_spacing)
