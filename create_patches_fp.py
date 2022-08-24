@@ -213,6 +213,8 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 				patch_size = orig_patch_size * patch_mm / ts.getMetadata()["mm_x"]
 				patch_size = round(patch_size)
 				del ts
+			# Use non-overlapping patches by default.
+			step_size = step_size or patch_size
 			# -------------------------------------------
 
 			current_patch_params.update({'patch_level': patch_level, 'patch_size': patch_size, 'step_size': step_size,
@@ -250,7 +252,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 parser = argparse.ArgumentParser(description='seg and patch')
 parser.add_argument('--source', type = str,
 					help='path to folder containing raw wsi image files')
-parser.add_argument('--step_size', type = int, default=256,
+parser.add_argument('--step_size', type = int, default=None,
 					help='step_size')
 parser.add_argument('--patch_size', type = int, default=256,
 					help='patch_size')
