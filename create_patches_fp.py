@@ -10,6 +10,7 @@ import argparse
 import pdb
 import pandas as pd
 from tqdm import tqdm
+import openslide
 
 def stitching(file_path, wsi_object, downscale = 64):
 	start = time.time()
@@ -56,7 +57,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 				  use_default_params = False, 
 				  seg = False, save_mask = True, 
 				  stitch= False, 
-				  patch = False, auto_skip=True, process_list = None):
+				  patch = False, auto_skip=True, process_list = None, patch_spacing = None):
 	
 
 
@@ -86,6 +87,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 	seg_times = 0.
 	patch_times = 0.
 	stitch_times = 0.
+	orig_patch_size = patch_size
 
 	for i in tqdm(range(total)):
 		df.to_csv(os.path.join(save_dir, 'process_list_autogen.csv'), index=False)
@@ -195,8 +197,43 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 
 		patch_time_elapsed = -1 # Default time
 		if patch:
+			# -------------------------------------------
+			# Added by Jakub Kaczmarzyk (github kaczmarj) to get patches at a constant
+			# physical size. For example, getting a patch_size of 256 pixels at 0.5 MPP
+			# will yield 128 micrometer patches.
+			if patch_level != 0:
+				raise ValueError("If patch_spacing is not None, patch_level must be 0.")
+
+			print(f"  Reading MPP of slide {WSI_object.name}")
+			mppx = WSI_object.wsi.properties[openslide.PROPERTY_NAME_MPP_X]
+			mppy = WSI_object.wsi.properties[openslide.PROPERTY_NAME_MPP_Y]
+			if mppx is None or mppy is None:
+				print(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+				print(f"!!!!!!!!!! Cannot read MPP of slide: {WSI_object.name}")
+				print(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+				continue
+			try:
+				mppx = float(mppx)
+				mppy = float(mppy)
+			except ValueError:
+				print(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+				print(f"!!!!!!!!!! Cannot read MPP of slide: {WSI_object.name}")
+				print(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+				continue
+			mpp = (mppx + mppy) / 2
+			patch_size = orig_patch_size * patch_spacing / mpp
+			patch_size = round(patch_size)
+			patch_size_microns = orig_patch_size * patch_spacing
+			print(f"  Requested size of {orig_patch_size} pixels at {patch_spacing} MPP ({patch_size_microns:0.2f} microns)")
+			print(f"  The slide has MPP {mpp}, so grid will have {patch_size} pixels spacing.")
+
+			# Use non-overlapping patches by default.
+			print(f"Forcing the use of non-overlapping patches... step_size={step_size}")
+			step_size = patch_size
+			# -------------------------------------------			
+			
 			current_patch_params.update({'patch_level': patch_level, 'patch_size': patch_size, 'step_size': step_size, 
-										 'save_path': patch_save_dir})
+										 'save_path': patch_save_dir, "slide_mpp": mpp, "patch_size_microns": patch_size_microns})
 			file_path, patch_time_elapsed = patching(WSI_object = WSI_object,  **current_patch_params,)
 		
 		stitch_time_elapsed = -1
@@ -246,6 +283,8 @@ parser.add_argument('--patch_level', type=int, default=0,
 					help='downsample level at which to patch')
 parser.add_argument('--process_list',  type = str, default=None,
 					help='name of list of images to process with parameters (.csv)')
+parser.add_argument("--patch_spacing", type=float, required=True,
+				    help="patch spacing in micrometers per pixel.")
 
 if __name__ == '__main__':
 	args = parser.parse_args()
@@ -308,4 +347,5 @@ if __name__ == '__main__':
 											seg = args.seg,  use_default_params=False, save_mask = True, 
 											stitch= args.stitch,
 											patch_level=args.patch_level, patch = args.patch,
-											process_list = process_list, auto_skip=args.no_auto_skip)
+											process_list = process_list, auto_skip=args.no_auto_skip, 
+											patch_spacing=args.patch_spacing)

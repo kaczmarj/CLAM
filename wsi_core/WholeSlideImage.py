@@ -379,8 +379,12 @@ class WholeSlideImage(object):
         for idx, cont in enumerate(self.contours_tissue):
             if (idx + 1) % fp_chunk_size == fp_chunk_size:
                 print('Processing contour {}/{}'.format(idx, n_contours))
-            
+    
+            slide_mpp = kwargs.pop("slide_mpp", "unknown")
+            patch_size_microns = kwargs.pop("patch_size_microns", "unknown")
             asset_dict, attr_dict = self.process_contour(cont, self.holes_tissue[idx], patch_level, save_path, patch_size, step_size, **kwargs)
+            attr_dict["coords"]["slide_mpp"] = slide_mpp
+            attr_dict["coords"]["patch_size_microns"] = patch_size_microns
             if len(asset_dict) > 0:
                 if init:
                     save_hdf5(save_path_hdf5, asset_dict, attr_dict, mode='w')
@@ -735,7 +739,3 @@ class WholeSlideImage(object):
         tissue_mask = tissue_mask.astype(bool)
         print('detected {}/{} of region as tissue'.format(tissue_mask.sum(), tissue_mask.size))
         return tissue_mask
-
-
-
-
